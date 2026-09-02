@@ -261,25 +261,7 @@ export default function Home() {
             onBack={() => setPanel("home")}
           >
             <div className="mx-auto max-w-md rounded-3xl border border-white/10 bg-white/[0.03] p-7">
-              <input
-                type="email"
-                placeholder="E-posta"
-                className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none"
-              />
-
-              <input
-                type="password"
-                placeholder="Şifre"
-                className="mb-5 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none"
-              />
-
-              <button className="w-full rounded-xl bg-white py-3 font-bold text-black">
-                Giriş Yap
-              </button>
-
-              <button className="mt-3 w-full rounded-xl border border-white/10 py-3 text-sm text-white/60 hover:bg-white/5">
-                Yeni Hesap Oluştur
-              </button>
+              <AuthPanel onSuccess={() => setPanel("home")} />
             </div>
           </PanelShell>
         )}
@@ -518,3 +500,139 @@ function PanelShell({
     </section>
   );
 }
+
+function AuthPanel({ onSuccess }: { onSuccess: () => void }) {
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    setMessage("");
+
+    if (!email || !password) {
+      setMessage("E-posta ve şifre gerekli.");
+      return;
+    }
+
+    if (mode === "signup" && !username) {
+      setMessage("Kullanıcı adı gerekli.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setMessage("Şifre en az 6 karakter olmalı.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { createClient } = await import("../lib/supabase");
+      const supabase = createClient();
+
+      if (mode === "signup") {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: "https://lumorix-comics.vercel.app/auth/callback",
+            data: {
+              username,
+              display_name: username,
+            },
+          },
+        });
+
+        if (error) throw error;
+
+        if (data.session) {
+          setMessage("Hesabın oluşturuldu.");
+          onSuccess();
+        } else {
+          setMessage(
+            "Kayıt başarılı. E-posta adresine gönderilen doğrulama bağlantısını kontrol et."
+          );
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) throw error;
+
+        setMessage("Giriş başarılı.");
+        onSuccess();
+      }
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Bir hata oluştu."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      {mode === "signup" && (
+        <input
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Kullanıcı adı"
+          className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none"
+        />
+      )}
+
+      <input
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        type="email"
+        placeholder="E-posta"
+        className="mb-3 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none"
+      />
+
+      <input
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        type="password"
+        placeholder="Şifre"
+        className="mb-5 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none"
+      />
+
+      <button
+        onClick={submit}
+        disabled={loading}
+        className="w-full rounded-xl bg-white py-3 font-bold text-black disabled:opacity-50"
+      >
+        {loading
+          ? "Bekleyin..."
+          : mode === "login"
+            ? "Giriş Yap"
+            : "Hesap Oluştur"}
+      </button>
+
+      <button
+        onClick={() => {
+          setMode(mode === "login" ? "signup" : "login");
+          setMessage("");
+        }}
+        className="mt-3 w-full rounded-xl border border-white/10 py-3 text-sm text-white/60 hover:bg-white/5"
+      >
+        {mode === "login"
+          ? "Yeni Hesap Oluştur"
+          : "Zaten hesabım var — Giriş Yap"}
+      </button>
+
+      {message && (
+        <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/60">
+          {message}
+        </div>
+      )}
+    </div>
+  );
+}
+
