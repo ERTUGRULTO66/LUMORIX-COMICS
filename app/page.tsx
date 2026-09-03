@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Panel =
   | "home"
@@ -65,6 +65,40 @@ export default function Home() {
   const [panel, setPanel] = useState<Panel>("home");
   const [selectedComic, setSelectedComic] = useState(comics[0]);
   const [selectedGenre, setSelectedGenre] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadSession = async () => {
+      const { createClient } = await import("../lib/supabase");
+      const supabase = createClient();
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (mounted) {
+        setUserEmail(session?.user?.email ?? "");
+      }
+
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+        if (mounted) {
+          setUserEmail(nextSession?.user?.email ?? "");
+        }
+      });
+
+      return () => subscription.unsubscribe();
+    };
+
+    loadSession();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const openComic = (comic: (typeof comics)[number]) => {
     setSelectedComic(comic);
@@ -115,12 +149,36 @@ export default function Home() {
             </NavButton>
           </nav>
 
-          <button
-            onClick={() => setPanel("login")}
-            className="rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-semibold transition hover:bg-white/10"
-          >
-            Giriş / Kayıt
-          </button>
+          {userEmail ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPanel("login")}
+                className="rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-semibold transition hover:bg-white/10"
+              >
+                👤 {userEmail}
+              </button>
+
+              <button
+                onClick={async () => {
+                  const { createClient } = await import("../lib/supabase");
+                  const supabase = createClient();
+                  await supabase.auth.signOut();
+                  setUserEmail("");
+                  setPanel("home");
+                }}
+                className="rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/60 transition hover:bg-white/10 hover:text-white"
+              >
+                Çıkış
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setPanel("login")}
+              className="rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-semibold transition hover:bg-white/10"
+            >
+              Giriş / Kayıt
+            </button>
+          )}
         </div>
       </header>
 
